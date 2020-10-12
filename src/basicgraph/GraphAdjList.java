@@ -94,32 +94,23 @@ public class GraphAdjList extends Graph {
 	 * @param v the index of vertex.
 	 * @return List<Integer> a list of indices of vertices.  
 	 */		
-	 public List<Integer> getDistance2(int v) 
+	public List<Integer> getDistance2(int selfNode) 
 	 {
-		 List<Integer> gd = new ArrayList<>();
-		 List<Integer> neighbours = getNeighbors(v);
-		 List<Integer> child;
-		 for(int i : neighbours)
+		 List<Integer> neighborsOfTwoHops = new ArrayList<>();
+		 List<Integer> neighbours = getNeighbors(selfNode);
+		 
+		 List<Integer> children;
+		 for(int neighbour : neighbours)
 		 {
-			 child = getNeighbors(i);
-			 for(int j : child)
+			 children = getNeighbors(neighbour);
+			 
+			 for(int child : children)
 			 {
-				 gd.add(j);
+				 neighborsOfTwoHops.add(child);
 			 }
 		 }
 		 
-//		 neighbours = getInNeighbors(v);
-//		 for(int i : neighbours)
-//		 {
-//			 child = getInNeighbors(i);
-//			 for(int j : child)
-//			 {
-//				 if(j != v && !neighbours.contains(j))
-//					 gd.add(j);
-//			 }
-//		 }
-		 
-		 return gd;
+		 return neighborsOfTwoHops;
 	 }
 	
 	/**
