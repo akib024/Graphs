@@ -103,32 +103,35 @@ public class GraphAdjMatrix extends Graph {
 	 * @param v the index of vertex.
 	 * @return List<Integer> a list of indices of vertices.  
 	 */	
-	public List<Integer> getDistance2(int v) 
+	public List<Integer> getDistance2(int selfNode) 
 	{
-		 List<Integer> gd = new ArrayList<>();
-		 List<Integer> neighbours = getNeighbors(v);
-		 List<Integer> child;
-		 for(int i : neighbours)
-		 {
-			 child = getNeighbors(i);
-			 for(int j : child)
-			 {
-				 gd.add(j);
+		List<Integer> neighborsOfTwoHops = new ArrayList<>();
+		 
+		int length = getNumVertices();
+		
+		int r1 = length;
+		int c1 = length;
+		
+		int r2 = length;
+		int c2 = length;
+		 
+		int[][] newAdjMatrix = new int[r1][c2];
+		 
+		for (int i = 0; i < r1; i += 1) {
+			for (int j = 0; j < c2; j += 1) {
+				for (int k = 0; k < c1; k += 1) {
+					newAdjMatrix[i][j] += adjMatrix[i][k] * adjMatrix[k][j];
+				} 
+			}
+		}
+		 
+		 for (int i = 0; i < length; i += 1) {
+			 for (int j = 1; j <= newAdjMatrix[selfNode][i]; j += 1) {
+				 neighborsOfTwoHops.add(i);
 			 }
 		 }
 		 
-//		 neighbours = getInNeighbors(v);
-//		 for(int i : neighbours)
-//		 {
-//			 child = getInNeighbors(i);
-//			 for(int j : child)
-//			 {
-//				 if(j != v && !neighbours.contains(j))
-//					 gd.add(j);
-//			 }
-//		 }
-		 
-		 return gd;
+		 return neighborsOfTwoHops;
 	 }
 	
 	/**
