@@ -8,21 +8,18 @@
 package roadgraph;
 
 
-import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.function.Consumer;
 
 import geography.GeographicPoint;
+import geography.RoadSegment;
 import util.GraphLoader;
 
 /**
@@ -34,9 +31,10 @@ import util.GraphLoader;
  */
 public class MapGraph {
 	//TODO: Add your member variables here in WEEK 3
-	private Set<GeographicPoint> verticesSet;
-	private List<Edge> edgesList; 
-	private Map<GeographicPoint, Set<GeographicPoint>> adjacentVertices;
+	private Set<GeographicPoint> setOfVertices = null;
+	private List<RoadSegment> listOfEdges = null;
+	private Map<Double, Set<Double>> longitudesAgainstLatitude = null;
+	private Map<GeographicPoint, Set<GeographicPoint>> neighborsAgainstGeographicPoint = null;
 	
 	
 	/** 
@@ -45,9 +43,10 @@ public class MapGraph {
 	public MapGraph()
 	{
 		// TODO: Implement in this constructor in WEEK 3
-		verticesSet = new HashSet<>();
-		edgesList = new ArrayList<>();
-		adjacentVertices = new HashMap<>();
+		this.setOfVertices = new HashSet<>();
+		this.longitudesAgainstLatitude = new HashMap<>();
+		this.listOfEdges = new ArrayList<>();
+		this.neighborsAgainstGeographicPoint = new HashMap<>();
 	}
 	
 	/**
@@ -57,7 +56,7 @@ public class MapGraph {
 	public int getNumVertices()
 	{
 		//TODO: Implement this method in WEEK 3
-		return verticesSet.size();
+		return this.setOfVertices.size();
 	}
 	
 	/**
@@ -67,7 +66,7 @@ public class MapGraph {
 	public Set<GeographicPoint> getVertices()
 	{
 		//TODO: Implement this method in WEEK 3
-		return verticesSet;
+		return new HashSet<>(this.setOfVertices);
 	}
 	
 	/**
@@ -77,7 +76,7 @@ public class MapGraph {
 	public int getNumEdges()
 	{
 		//TODO: Implement this method in WEEK 3
-		return edgesList.size();
+		return this.listOfEdges.size();
 	}
 
 	
@@ -92,11 +91,27 @@ public class MapGraph {
 	public boolean addVertex(GeographicPoint location)
 	{
 		// TODO: Implement this method in WEEK 3
-		try{
-			return verticesSet.add(location);
-		}catch(Exception e){
+		if (location == null)
 			return false;
+		
+		double latitude = location.getX();
+		double longitude = location.getY();
+		
+		Set<Double> setOfLongitudes = this.longitudesAgainstLatitude.get(latitude);
+		
+		if (setOfLongitudes != null) {
+			if (setOfLongitudes.contains(longitude)) {
+				return false;
+			}
+		} else {
+			setOfLongitudes = new HashSet<>();
 		}
+		
+		setOfLongitudes.add(longitude);
+		this.longitudesAgainstLatitude.put(latitude, setOfLongitudes);
+		this.setOfVertices.add(location);
+		
+		return true;
 	}
 	
 	/**
@@ -115,29 +130,19 @@ public class MapGraph {
 			String roadType, double length) throws IllegalArgumentException {
 
 		//TODO: Implement this method in WEEK 3
-		try{
-			if(!verticesSet.contains(from) || !verticesSet.contains(to))
-					throw new IllegalArgumentException();
-		}catch(Exception e){
+		if (!this.setOfVertices.contains(from) || !this.setOfVertices.contains(to)
+				|| from == null || to == null 
+				|| roadName == null || roadType == null
+				|| length < 0)
 			throw new IllegalArgumentException();
-		}
 		
-		if(roadName.equals(null) || roadType.equals(null) || length < 0)
-			throw new IllegalArgumentException();
-		else{
-			Edge e = new Edge(from, to, roadName, roadType, length);
-			edgesList.add(e);
-			
-			if(adjacentVertices.containsKey(from))
-			{
-				adjacentVertices.get(from).add(to);
-			}else{
-				Set<GeographicPoint> tempSet = new HashSet<>();
-				tempSet.add(to);
-				adjacentVertices.put(from, tempSet);
-			}
+		if (this.neighborsAgainstGeographicPoint.get(from) == null) {
+			this.neighborsAgainstGeographicPoint.put(from, new HashSet<>());
 		}
+		this.neighborsAgainstGeographicPoint.get(from).add(to);
 		
+		RoadSegment edge = new RoadSegment(from, to, new ArrayList<GeographicPoint>(), roadName, roadType, length);
+		this.listOfEdges.add(edge);
 	}
 	
 
@@ -166,67 +171,49 @@ public class MapGraph {
 			 					     GeographicPoint goal, Consumer<GeographicPoint> nodeSearched)
 	{
 		// TODO: Implement this method in WEEK 3
-		boolean found = false;
-		Map<GeographicPoint, GeographicPoint>parent = new HashMap<>();
-		Map<GeographicPoint, Boolean>visited = new HashMap<>();
+		Queue<GeographicPoint> queue = new LinkedList<>();
+		Set<GeographicPoint> setOfVisitedNodes = new HashSet<>();
+		Map<GeographicPoint, GeographicPoint> parentAginstChildPoint = new HashMap<>();
+		LinkedList<GeographicPoint> finalList = new LinkedList<>();
 		
-		for(GeographicPoint node : verticesSet)
-		{
-			parent.put(node, null);
-			visited.put(node, false);
-		}
+		queue.add(start);
+		setOfVisitedNodes.add(start);
+		boolean isFound = false;
 		
-		Queue<GeographicPoint>q = new LinkedList<>();
-		
-		q.offer(start);
-		
-		while(!q.isEmpty())
-		{
-			GeographicPoint current = q.remove();
-			
-			
-			if(!adjacentVertices.containsKey(current))
-				continue;
-			
-			Set<GeographicPoint> tempSet = adjacentVertices.get(current);
-			
-			for(GeographicPoint n : tempSet)
-			{
-				if(!visited.get(n))
-				{
-					visited.put(n, true);
-					parent.put(n, current);
-					q.offer(n);
-				}
-				
-				if(n.equals(goal))
-				{
-					found = true;
-					break;
-				}
+		while (!queue.isEmpty()) {
+			GeographicPoint currentPoint = queue.poll();
+			nodeSearched.accept(currentPoint);
+			if (currentPoint.equals(goal)) {
+				isFound = true;
+				break;
 			}
 			
-			if(found)
-				break;
+			Set<GeographicPoint> neighbors = this.neighborsAgainstGeographicPoint.get(currentPoint);
+			if (neighbors != null) {
+				for (GeographicPoint neighbor : neighbors) {
+					if (!setOfVisitedNodes.contains(neighbor)) {
+						setOfVisitedNodes.add(neighbor);
+						queue.add(neighbor);
+						parentAginstChildPoint.put(neighbor, currentPoint);
+					}
+				}
+			}
 		}
-		
 		// Hook for visualization.  See writeup.
 		//nodeSearched.accept(next.getLocation());
-		List<GeographicPoint>toReturn = new ArrayList<>();
-		
-		if(!found)
+		if (!isFound) {
+			System.out.println("No path exists");
 			return null;
-		
-		toReturn.add(goal);
-		while(!goal.equals(start))
-		{
-			goal = parent.get(goal);
-			toReturn.add(goal);
 		}
 		
-		Collections.reverse(toReturn);
+		GeographicPoint currentPoint = goal;
+		while (!currentPoint.equals(start)) {
+			finalList.addFirst(currentPoint);
+			currentPoint = parentAginstChildPoint.get(currentPoint);
+		}
+		finalList.addFirst(currentPoint);
 
-		return toReturn;
+		return finalList;
 	}
 	
 
@@ -255,86 +242,10 @@ public class MapGraph {
 	public List<GeographicPoint> dijkstra(GeographicPoint start, 
 										  GeographicPoint goal, Consumer<GeographicPoint> nodeSearched)
 	{
-		boolean found = false;
-		int dijkstra_count = 0;
 		// TODO: Implement this method in WEEK 4
-		Comparator<Node> comparator = new DistanceComparator();
-        PriorityQueue<Node> PQ = new PriorityQueue<Node>(comparator);
-		
-		Set<GeographicPoint> visited = new HashSet<>();
-		Map<GeographicPoint, GeographicPoint> parent = new HashMap<>();
-		Map<GeographicPoint, Node> correspondingNode = new HashMap<>();
-		
-		for(GeographicPoint p : verticesSet)
-		{
-			Node n = new Node(p, Double.MAX_VALUE);
-			correspondingNode.put(p, n);
-		}
-		
-		correspondingNode.get(start).distanceFromStart = 0;
-		PQ.add(correspondingNode.get(start));
-		
-		while(!PQ.isEmpty())
-		{
-			GeographicPoint curr = PQ.poll().point;
-			dijkstra_count += 1;
-			
-			if(!visited.contains(curr))
-			{
-				visited.add(curr);
-				
-				if(curr.equals(goal))
-				{
-					found = true;
-					break;
-				}
-				
-				Set<GeographicPoint> correspondingAdjecency = adjacentVertices.get(curr);
-				if(correspondingAdjecency != null)
-				{
-					for(GeographicPoint n : correspondingAdjecency)
-					{
-						if(!visited.contains(n))
-						{
-							//Hook for visualization.  See writeup.
-							//nodeSearched.accept(next.getLocation());
-							nodeSearched.accept(n);
-							double d = correspondingNode.get(curr).distanceFromStart + 
-																		curr.distance(n);
-							if(d < correspondingNode.get(n).distanceFromStart)
-							{
-								correspondingNode.get(n).distanceFromStart = d;
-								if(!parent.containsKey(n))
-								{
-									parent.put(n, curr);
-								}else{
-									parent.replace(n, curr);
-								}
-								PQ.offer(correspondingNode.get(n));
-							}
-						}
-					}
-				}
-			}
-		}
 
-		if(found)
-		{
-			List<GeographicPoint> l = new ArrayList<>();
-			GeographicPoint point = goal;
-			
-			while(parent.containsKey(point))
-			{
-				l.add(point);
-				point = parent.get(point);
-			}
-			
-			l.add(point);
-			Collections.reverse(l);
-			System.out.println("Found for dijkstra: "+dijkstra_count);
-			return l;
-		}
-		
+		// Hook for visualization.  See writeup.
+		//nodeSearched.accept(next.getLocation());
 		
 		return null;
 	}
@@ -363,86 +274,10 @@ public class MapGraph {
 	public List<GeographicPoint> aStarSearch(GeographicPoint start, 
 											 GeographicPoint goal, Consumer<GeographicPoint> nodeSearched)
 	{
-		boolean found = false;
-		int astar_count = 0;
 		// TODO: Implement this method in WEEK 4
-		Comparator<Node> comparator = new HeuristicComparator();
-        PriorityQueue<Node> PQ = new PriorityQueue<Node>(comparator);
 		
-		Set<GeographicPoint> visited = new HashSet<>();
-		Map<GeographicPoint, GeographicPoint> parent = new HashMap<>();
-		Map<GeographicPoint, Node> correspondingNode = new HashMap<>();
-		
-		for(GeographicPoint p : verticesSet)
-		{
-			Node n = new Node(p, Double.MAX_VALUE, p.distance(goal));
-			correspondingNode.put(p, n);
-		}
-		
-		correspondingNode.get(start).distanceFromStart = 0;
-		PQ.add(correspondingNode.get(start));
-		
-		while(!PQ.isEmpty())
-		{
-			GeographicPoint curr = PQ.poll().point;
-			astar_count += 1;
-			//Hook for visualization.  See writeup.
-			//nodeSearched.accept(next.getLocation());
-			nodeSearched.accept(curr);
-			
-			if(!visited.contains(curr))
-			{
-				visited.add(curr);
-				
-				if(curr.equals(goal))
-				{
-					found = true;
-					break;
-				}
-				
-				Set<GeographicPoint> correspondingAdjecency = adjacentVertices.get(curr);
-				if(correspondingAdjecency != null)
-				{
-					for(GeographicPoint n : correspondingAdjecency)
-					{
-						if(!visited.contains(n))
-						{
-							double d = correspondingNode.get(curr).distanceFromStart + 
-																				curr.distance(n);
-							if(d < correspondingNode.get(n).distanceFromStart)
-							{
-								correspondingNode.get(n).distanceFromStart = d;
-								if(!parent.containsKey(n))
-								{
-									parent.put(n, curr);
-								}else{
-									parent.replace(n, curr);
-								}
-								PQ.offer(correspondingNode.get(n));
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if(found)
-		{
-			List<GeographicPoint> l = new ArrayList<>();
-			GeographicPoint point = goal;
-			
-			while(parent.containsKey(point))
-			{
-				l.add(point);
-				point = parent.get(point);
-			}
-			
-			l.add(point);
-			Collections.reverse(l);
-			System.out.println("Found for a*: "+astar_count);
-			return l;
-		}
-		
+		// Hook for visualization.  See writeup.
+		//nodeSearched.accept(next.getLocation());
 		
 		return null;
 	}
@@ -464,7 +299,7 @@ public class MapGraph {
 		 * the Week 3 End of Week Quiz, EVEN IF you score 100% on the 
 		 * programming assignment.
 		 */
-		
+		/*
 		MapGraph simpleTestMap = new MapGraph();
 		GraphLoader.loadRoadMap("data/testdata/simpletest.map", simpleTestMap);
 		
@@ -493,19 +328,7 @@ public class MapGraph {
 		System.out.println("Test 3 using utc: Dijkstra should be 37 and AStar should be 10");
 		testroute = testMap.dijkstra(testStart,testEnd);
 		testroute2 = testMap.aStarSearch(testStart,testEnd);
-		
-		//question 1:
-		MapGraph theMap = new MapGraph();
-		System.out.print("DONE. \nLoading the map...");
-		GraphLoader.loadRoadMap("data/maps/utc.map", theMap);
-		System.out.println("DONE.");
-		
-		GeographicPoint start = new GeographicPoint(32.8648772, -117.2254046);
-		GeographicPoint end = new GeographicPoint(32.8660691, -117.217393);
-
-		List<GeographicPoint> route = theMap.dijkstra(start,end);
-		List<GeographicPoint> route2 = theMap.aStarSearch(start,end);
-		
+		*/
 		
 		
 		/* Use this code in Week 3 End of Week Quiz */
@@ -525,57 +348,4 @@ public class MapGraph {
 		
 	}
 	
-}
-
-class DistanceComparator implements Comparator<Node>
-{
-    @Override
-    public int compare(Node x, Node y)
-    {
-        if (x.distanceFromStart < y.distanceFromStart)
-        {
-            return -1;
-        }
-        if (x.distanceFromStart > y.distanceFromStart)
-        {
-            return 1;
-        }
-        return 0;
-    }
-}
-
-class HeuristicComparator implements Comparator<Node>
-{
-    @Override
-    public int compare(Node x, Node y)
-    {
-        if (x.distanceFromStart + x.distanceToGoal < y.distanceFromStart + y.distanceToGoal)
-        {
-            return -1;
-        }
-        if (x.distanceFromStart + x.distanceToGoal > y.distanceFromStart + y.distanceToGoal)
-        {
-            return 1;
-        }
-        return 0;
-    }
-}
-
-class Node{
-	protected GeographicPoint point;
-	protected double distanceFromStart;
-	protected double distanceToGoal;
-	
-	public Node(GeographicPoint p, double dfs)
-	{
-		point = p;
-		distanceFromStart = dfs;
-	}
-	
-	public Node(GeographicPoint p, double dfs, double dtg)
-	{
-		point = p;
-		distanceFromStart = dfs;
-		distanceToGoal = dtg;
-	}
 }
