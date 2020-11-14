@@ -24,6 +24,7 @@ import basicgraph.Graph;
 import geography.GeographicPoint;
 import geography.RoadSegment;
 import roadgraph.MapGraph;
+import roadgraph.MapGraph2;
 
 
 public class GraphLoader 
@@ -111,6 +112,11 @@ public class GraphLoader
 	{
 		loadRoadMap(filename, map, null, null);
 	}
+	
+	public static void loadRoadMap(String filename, roadgraph.MapGraph2 map)
+	{
+		loadRoadMap(filename, map, null, null);
+	}
 
 	
 	/**	  
@@ -131,6 +137,28 @@ public class GraphLoader
 	 *   assumed to be directed.
 	 */
 	public static void loadRoadMap(String filename, roadgraph.MapGraph map,  
+			HashMap<GeographicPoint,HashSet<RoadSegment>> segments, 
+			Set<GeographicPoint> intersectionsToLoad)
+	{
+		Collection<GeographicPoint> nodes = new HashSet<GeographicPoint>();
+        HashMap<GeographicPoint,List<LinkedList<RoadLineInfo>>> pointMap = 
+        		buildPointMapOneWay(filename);
+		
+        // Add the nodes to the graph
+		List<GeographicPoint> intersections = findIntersections(pointMap);
+		for (GeographicPoint pt : intersections) {
+			map.addVertex(pt);
+			if (intersectionsToLoad != null) {
+				intersectionsToLoad.add(pt);
+			}
+			nodes.add(pt);
+		}
+		
+		
+		addEdgesAndSegments(nodes, pointMap, map, segments);
+	}
+	
+	public static void loadRoadMap(String filename, roadgraph.MapGraph2 map,  
 			HashMap<GeographicPoint,HashSet<RoadSegment>> segments, 
 			Set<GeographicPoint> intersectionsToLoad)
 	{
@@ -325,6 +353,52 @@ public class GraphLoader
 	private static void addEdgesAndSegments(Collection<GeographicPoint> nodes, 
 			HashMap<GeographicPoint,List<LinkedList<RoadLineInfo>>> pointMap,
 			MapGraph map, 
+			HashMap<GeographicPoint,HashSet<RoadSegment>> segments)
+	{
+	
+		// Now we need to add the edges
+		// This is the tricky part
+		for (GeographicPoint pt : nodes) {
+			// Trace the node to its next node, building up the points 
+			// on the edge as you go.
+			List<LinkedList<RoadLineInfo>> inAndOut = pointMap.get(pt);
+			LinkedList<RoadLineInfo> outgoing = inAndOut.get(0);
+			for (RoadLineInfo info : outgoing) {
+				HashSet<GeographicPoint> used = new HashSet<GeographicPoint>();
+				used.add(pt);
+				
+				List<GeographicPoint> pointsOnEdge = 
+						findPointsOnEdge(pointMap, info, nodes);
+				GeographicPoint end = pointsOnEdge.remove(pointsOnEdge.size()-1);
+				double length = getRoadLength(pt, end, pointsOnEdge);
+				map.addEdge(pt, end, info.roadName, info.roadType, length);
+
+				// If the segments variable is not null, then we 
+				// save the road geometry
+				if (segments != null) {
+					// Now create road Segments for each edge
+					HashSet<RoadSegment> segs = segments.get(pt);
+					if (segs == null) {
+						segs = new HashSet<RoadSegment>();
+						segments.put(pt,segs);
+					}
+					RoadSegment seg = new RoadSegment(pt, end, pointsOnEdge, 
+							info.roadName, info.roadType, length);
+					segs.add(seg);
+					segs = segments.get(end);
+					if (segs == null) {
+						segs = new HashSet<RoadSegment>();
+						segments.put(end,segs);
+					}
+					segs.add(seg);
+				}
+			}
+		}
+	}
+	
+	private static void addEdgesAndSegments(Collection<GeographicPoint> nodes, 
+			HashMap<GeographicPoint,List<LinkedList<RoadLineInfo>>> pointMap,
+			MapGraph2 map, 
 			HashMap<GeographicPoint,HashSet<RoadSegment>> segments)
 	{
 	
